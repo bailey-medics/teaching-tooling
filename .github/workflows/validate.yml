@@ -1,0 +1,52 @@
+# Reusable workflow: validate teaching content on PR.
+#
+# Called by organisation repos (e.g. eoeeta-teaching, respiratory-teaching)
+# via thin workflow callers.
+name: Validate teaching content
+
+on:
+  workflow_call:
+    inputs:
+      org_id:
+        description: "Organisation identifier (e.g. eoeeta, respiratory)"
+        required: true
+        type: string
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out content repo
+        uses: actions/checkout@v4
+        with:
+          path: content
+
+      - name: Check out teaching-tooling
+        uses: actions/checkout@v4
+        with:
+          repository: bailey-medics/teaching-tooling
+          path: tooling
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Python deps
+        run: pip install -r tooling/requirements.txt
+
+      - name: Validate module metadata
+        run: python tooling/scripts/validate.py content/modules/
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install Node deps
+        working-directory: tooling
+        run: npm ci
+
+      - name: Validate MDX content
+        run: node tooling/scripts/validate_mdx.js content/modules/
