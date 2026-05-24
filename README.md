@@ -1,13 +1,12 @@
 # teaching-tooling
 
-Shared validation, compilation, and deployment tooling for teaching content repositories.
+Shared validation and deployment tooling for teaching content repositories.
 
 ## Overview
 
 This repo provides:
 
 - **Validation scripts** — ensure module metadata and MDX content are correct before merge
-- **Compilation scripts** — convert MDX content into JSON slide structures for the API
 - **Reusable GitHub Actions workflows** — organisation repos call these as thin workflow callers
 
 Organisation repos (e.g. `eoeeta-teaching`, `respiratory-teaching`) contain only content — no scripts. All tooling is centralised here.
@@ -17,8 +16,7 @@ Organisation repos (e.g. `eoeeta-teaching`, `respiratory-teaching`) contain only
 ```
 scripts/
 ├── validate.py          # Module metadata + assessment validation (Pydantic)
-├── validate_mdx.js      # MDX parse + validate (CI gate)
-└── compile_mdx.js       # MDX → compiled.json
+└── validate_mdx.js      # MDX parse + validate (CI gate)
 
 tests/
 ├── fixtures/            # Golden test modules (valid + invalid)
@@ -71,12 +69,11 @@ pip install -r requirements.txt
 python scripts/validate.py /path/to/modules/
 ```
 
-### Node.js (MDX validation + compilation)
+### Node.js (MDX validation)
 
 ```bash
 npm install
 node scripts/validate_mdx.js /path/to/modules/
-node scripts/compile_mdx.js /path/to/modules/
 ```
 
 ### Running tests

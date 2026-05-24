@@ -69,9 +69,6 @@ jobs:
       - name: Validate MDX content
         run: node tooling/scripts/validate_mdx.js content/modules/
 
-      - name: Compile MDX to JSON
-        run: node tooling/scripts/compile_mdx.js content/modules/
-
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
