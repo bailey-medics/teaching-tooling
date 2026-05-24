@@ -80,17 +80,39 @@ jobs:
 
       - name: Sync to GCS
         run: |
-          # Sync assessment content (questions, images, config)
-          # and compiled learning content to the teaching bucket
-          gsutil -m rsync -r -d \
-            content/modules/ \
-            gs://${{ secrets.GCP_TEACHING_GCS_BUCKET }}/${{ inputs.org_id }}/
+          BUCKET="${{ secrets.GCP_TEACHING_GCS_BUCKET }}"
+
+          # Sync each module's assessment content to questions/<bank_id>/
+          # and learning content to learning/<bank_id>/
+          # and module metadata to modules/<bank_id>/
+          for module_dir in content/modules/*/; do
+            bank_id=$(basename "$module_dir")
+
+            # Assessment content → questions/<bank_id>/
+            if [ -d "$module_dir/assessment" ]; then
+              gsutil -m rsync -r -d \
+                "$module_dir/assessment/" \
+                "gs://$BUCKET/questions/$bank_id/"
+            fi
+
+            # Learning content → learning/<bank_id>/
+            if [ -d "$module_dir/learning" ]; then
+              gsutil -m rsync -r -d \
+                "$module_dir/learning/" \
+                "gs://$BUCKET/learning/$bank_id/"
+            fi
+
+            # Module metadata → modules/<bank_id>/
+            if [ -f "$module_dir/module.yaml" ]; then
+              gsutil cp "$module_dir/module.yaml" \
+                "gs://$BUCKET/modules/$bank_id/module.yaml"
+            fi
+          done
 
       - name: Trigger backend sync
         run: |
           # Notify the backend to re-read module metadata from GCS
           curl -sf -X POST \
-            "${{ secrets.BACKEND_SYNC_URL }}/api/admin/teaching/modules/sync" \
+            "${{ secrets.BACKEND_SYNC_URL }}/api/ci/teaching/sync" \
             -H "Authorization: Bearer ${{ secrets.BACKEND_SYNC_TOKEN }}" \
-            -H "Content-Type: application/json" \
-            -d "{\"org_id\": \"${{ inputs.org_id }}\"}"
+            -H "Content-Type: application/json"
