@@ -176,9 +176,7 @@ def check_module(
 
     if main_status == "retired":
         # No changes allowed at all
-        changed = _git_diff_names(
-            ref, f"{modules_rel_path}/{module_id}/"
-        )
+        changed = _git_diff_names(ref, f"{modules_rel_path}/{module_id}/")
         if changed:
             result.add_violation(
                 module_id,

@@ -13,7 +13,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 from check_version_lock import (  # noqa: E402
     LockResult,
     check_module,
-    check_version_lock,
 )
 
 
@@ -51,11 +50,11 @@ class TestDraftModule:
         result = LockResult()
         with patch(
             "check_version_lock._git_show",
-            return_value=yaml.dump({"status": "draft", "moduleId": "test-bank"}),
+            return_value=yaml.dump(
+                {"status": "draft", "moduleId": "test-bank"}
+            ),
         ), patch("check_version_lock._git_diff_names", return_value=[]):
-            check_module(
-                tmp_module, "modules", "origin/main", result
-            )
+            check_module(tmp_module, "modules", "origin/main", result)
 
         assert result.passed
 
@@ -70,11 +69,11 @@ class TestDraftModule:
         result = LockResult()
         with patch(
             "check_version_lock._git_show",
-            return_value=yaml.dump({"status": "draft", "moduleId": "test-bank"}),
+            return_value=yaml.dump(
+                {"status": "draft", "moduleId": "test-bank"}
+            ),
         ):
-            check_module(
-                tmp_module, "modules", "origin/main", result
-            )
+            check_module(tmp_module, "modules", "origin/main", result)
 
         assert not result.passed
         assert "version must stay at 1" in result.violations[0].message
@@ -95,9 +94,7 @@ class TestRetiredModule:
             "check_version_lock._git_diff_names",
             return_value=["modules/test-bank/assessment/assessment.yaml"],
         ):
-            check_module(
-                tmp_module, "modules", "origin/main", result
-            )
+            check_module(tmp_module, "modules", "origin/main", result)
 
         assert not result.passed
         assert "permanently frozen" in result.violations[0].message
@@ -117,9 +114,7 @@ class TestRetiredModule:
             "check_version_lock._git_diff_names",
             return_value=[],
         ):
-            check_module(
-                tmp_module, "modules", "origin/main", result
-            )
+            check_module(tmp_module, "modules", "origin/main", result)
 
         # No changes = no violation (the PR didn't touch this module)
         assert result.passed
@@ -133,14 +128,14 @@ class TestLiveModule:
         result = LockResult()
         with patch(
             "check_version_lock._git_show",
-            return_value=yaml.dump({"status": "live", "moduleId": "test-bank"}),
+            return_value=yaml.dump(
+                {"status": "live", "moduleId": "test-bank"}
+            ),
         ), patch(
             "check_version_lock._git_diff_names",
             return_value=[],
         ):
-            check_module(
-                tmp_module, "modules", "origin/main", result
-            )
+            check_module(tmp_module, "modules", "origin/main", result)
 
         assert result.passed
 
@@ -172,9 +167,7 @@ class TestLiveModule:
             "check_version_lock._git_diff_names",
             return_value=["modules/test-bank/assessment/assessment.yaml"],
         ):
-            check_module(
-                tmp_module, "modules", "origin/main", result
-            )
+            check_module(tmp_module, "modules", "origin/main", result)
 
         assert result.passed
 
@@ -203,11 +196,11 @@ class TestLiveModule:
             "check_version_lock._git_show", side_effect=mock_git_show
         ), patch(
             "check_version_lock._git_diff_names",
-            return_value=["modules/test-bank/assessment/question_1/question.yaml"],
+            return_value=[
+                "modules/test-bank/assessment/question_1/question.yaml"
+            ],
         ):
-            check_module(
-                tmp_module, "modules", "origin/main", result
-            )
+            check_module(tmp_module, "modules", "origin/main", result)
 
         assert not result.passed
         assert "not bumped" in result.violations[0].message
@@ -239,9 +232,7 @@ class TestLiveModule:
             "check_version_lock._git_diff_names",
             return_value=["modules/test-bank/assessment/assessment.yaml"],
         ):
-            check_module(
-                tmp_module, "modules", "origin/main", result
-            )
+            check_module(tmp_module, "modules", "origin/main", result)
 
         assert not result.passed
         assert "increment by exactly 1" in result.violations[0].message
@@ -273,9 +264,7 @@ class TestLiveModule:
             "check_version_lock._git_diff_names",
             return_value=["modules/test-bank/assessment/assessment.yaml"],
         ):
-            check_module(
-                tmp_module, "modules", "origin/main", result
-            )
+            check_module(tmp_module, "modules", "origin/main", result)
 
         assert not result.passed
         assert "decreased" in result.violations[0].message
@@ -291,9 +280,7 @@ class TestNewModule:
             "check_version_lock._git_show",
             return_value=None,  # Not found on main
         ):
-            check_module(
-                tmp_module, "modules", "origin/main", result
-            )
+            check_module(tmp_module, "modules", "origin/main", result)
 
         assert result.passed
         assert result.modules_skipped == 1
