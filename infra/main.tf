@@ -38,7 +38,7 @@ resource "github_branch_protection" "main" {
 
   required_status_checks {
     strict   = true
-    contexts = ["Validate teaching content"]
+    contexts = ["Validate / validate / validate"]
   }
 
   enforce_admins = false
