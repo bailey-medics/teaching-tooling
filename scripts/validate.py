@@ -54,8 +54,8 @@ class ModuleYaml(BaseModel):
     @field_validator("status")
     @classmethod
     def validate_status(cls, v: str) -> str:
-        if v not in ("draft", "live"):
-            msg = f"status must be 'draft' or 'live', got '{v}'"
+        if v not in ("draft", "live", "retired"):
+            msg = f"status must be 'draft', 'live', or 'retired', got '{v}'"
             raise ValueError(msg)
         return v
 
