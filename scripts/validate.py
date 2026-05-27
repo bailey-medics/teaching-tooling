@@ -20,7 +20,6 @@ import re
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
 
 import yaml
 from pydantic import BaseModel, field_validator
@@ -54,8 +53,8 @@ class ModuleYaml(BaseModel):
     @field_validator("status")
     @classmethod
     def validate_status(cls, v: str) -> str:
-        if v not in ("draft", "live"):
-            msg = f"status must be 'draft' or 'live', got '{v}'"
+        if v not in ("draft", "live", "retired"):
+            msg = f"status must be 'draft', 'live', or 'retired', got '{v}'"
             raise ValueError(msg)
         return v
 
@@ -183,7 +182,9 @@ def _validate_assessment_dir(
         with open(config_path) as f:
             config = yaml.safe_load(f)
     except yaml.YAMLError as e:
-        result.add_error(f"{rel_base}/{config_path.name}", f"invalid YAML: {e}")
+        result.add_error(
+            f"{rel_base}/{config_path.name}", f"invalid YAML: {e}"
+        )
         return
 
     if not isinstance(config, dict):
@@ -221,15 +222,11 @@ def _validate_learning_dir(
     learning_dir: Path, result: ValidationResult
 ) -> None:
     """Validate learning directory has content.mdx."""
-    rel_base = str(
-        learning_dir.relative_to(learning_dir.parent.parent.parent)
-    )
+    rel_base = str(learning_dir.relative_to(learning_dir.parent.parent.parent))
 
     content_path = learning_dir / "content.mdx"
     if not content_path.is_file():
-        result.add_error(
-            rel_base, "learning/ exists but has no content.mdx"
-        )
+        result.add_error(rel_base, "learning/ exists but has no content.mdx")
         return
 
     # Check file is non-empty
@@ -277,7 +274,9 @@ def validate_modules_dir(modules_dir: Path) -> ValidationResult:
         return result
 
     module_dirs = sorted(
-        d for d in modules_dir.iterdir() if d.is_dir() and not d.name.startswith(".")
+        d
+        for d in modules_dir.iterdir()
+        if d.is_dir() and not d.name.startswith(".")
     )
 
     if not module_dirs:
