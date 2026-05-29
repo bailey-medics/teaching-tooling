@@ -1,0 +1,223 @@
+# Unified teaching CI/CD pipeline.
+#
+# Called by content repos (e.g. eoeeta-teaching) via a single thin caller.
+# Dispatches to the appropriate job based on the triggering event:
+#
+#   push to feature/**  → auto-create PR
+#   pull_request        → validate content + check branch protection
+#   push to main        → deploy to GCS + trigger backend sync
+#
+# This consolidates validate.yml, deploy.yml, and auto-pr.yml into one
+# reusable workflow, so content repos only need a single workflow file.
+name: Teaching pipeline
+
+on:
+  workflow_call:
+    inputs:
+      org_id:
+        description: "Organisation identifier (e.g. eoeeta, respiratory)"
+        required: true
+        type: string
+
+jobs:
+  # -------------------------------------------------------------------
+  # Auto-create a draft PR when a feature branch is first pushed
+  # -------------------------------------------------------------------
+  auto-pr:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/feature/')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Create PR if none exists
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          EXISTING=$(gh pr list \
+            --head "$GITHUB_REF_NAME" \
+            --base main \
+            --json number \
+            --jq '.[0].number' 2>/dev/null || true)
+
+          if [ -n "$EXISTING" ]; then
+            echo "PR #$EXISTING already exists for $GITHUB_REF_NAME"
+            exit 0
+          fi
+
+          TITLE=$(git log -1 --pretty=%s)
+
+          gh pr create \
+            --base main \
+            --head "$GITHUB_REF_NAME" \
+            --title "$TITLE" \
+            --body "Auto-created PR for \`$GITHUB_REF_NAME\`."
+
+  # -------------------------------------------------------------------
+  # Validate module metadata and MDX content on pull request
+  # -------------------------------------------------------------------
+  validate:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Check out content repo
+        uses: actions/checkout@v6
+        with:
+          path: content
+          fetch-depth: 0
+
+      - name: Fetch main branch
+        working-directory: content
+        run: git fetch origin main
+
+      - name: Check out teaching-tooling
+        uses: actions/checkout@v6
+        with:
+          repository: bailey-medics/teaching-tooling
+          path: tooling
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install Python deps
+        run: pip install -r tooling/requirements.txt
+
+      - name: Validate module metadata
+        run: python tooling/scripts/validate.py content/modules/
+
+      - name: Check version lock
+        working-directory: content
+        run: python ../tooling/scripts/check_version_lock.py modules/
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+
+      - name: Install Node deps
+        working-directory: tooling
+        run: npm ci
+
+      - name: Validate MDX content
+        run: node tooling/scripts/validate_mdx.js content/modules/
+
+  # -------------------------------------------------------------------
+  # Verify branch protection is configured (catches missing Terraform)
+  # -------------------------------------------------------------------
+  check-protection:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Check for active rulesets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          RULESETS=$(gh api "repos/${{ github.repository }}/rulesets" --jq 'length')
+
+          if [ "$RULESETS" -eq 0 ]; then
+            echo "::error::No branch protection rulesets found on this repository."
+            echo "::error::Add this repo to teaching_repos in teaching-tooling/infra/main.tf"
+            exit 1
+          fi
+
+          echo "✓ Found $RULESETS active ruleset(s)"
+
+  # -------------------------------------------------------------------
+  # Deploy content to GCS and trigger backend sync
+  # -------------------------------------------------------------------
+  deploy:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Check out content repo
+        uses: actions/checkout@v6
+        with:
+          path: content
+
+      - name: Check out teaching-tooling
+        uses: actions/checkout@v6
+        with:
+          repository: bailey-medics/teaching-tooling
+          path: tooling
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install Python deps
+        run: pip install -r tooling/requirements.txt
+
+      - name: Validate module metadata
+        run: python tooling/scripts/validate.py content/modules/
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+
+      - name: Install Node deps
+        working-directory: tooling
+        run: npm ci
+
+      - name: Validate MDX content
+        run: node tooling/scripts/validate_mdx.js content/modules/
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Set up gcloud CLI
+        uses: google-github-actions/setup-gcloud@v3
+
+      - name: Sync to GCS
+        run: |
+          BUCKET="${{ secrets.GCP_TEACHING_GCS_BUCKET }}"
+
+          for module_dir in content/modules/*/; do
+            bank_id=$(basename "$module_dir")
+
+            # Assessment content → questions/<bank_id>/
+            if [ -d "$module_dir/assessment" ]; then
+              gsutil -m rsync -r -d \
+                "$module_dir/assessment/" \
+                "gs://$BUCKET/questions/$bank_id/"
+            fi
+
+            # Learning content → learning/<bank_id>/
+            if [ -d "$module_dir/learning" ]; then
+              gsutil -m rsync -r -d \
+                "$module_dir/learning/" \
+                "gs://$BUCKET/learning/$bank_id/"
+            fi
+
+            # Module metadata → modules/<bank_id>/
+            if [ -f "$module_dir/module.yaml" ]; then
+              gsutil cp "$module_dir/module.yaml" \
+                "gs://$BUCKET/modules/$bank_id/module.yaml"
+            fi
+          done
+
+      - name: Trigger backend sync
+        run: |
+          curl -sf -X POST \
+            "${{ secrets.BACKEND_SYNC_URL }}/api/ci/teaching/sync" \
+            -H "Authorization: Bearer ${{ secrets.BACKEND_SYNC_TOKEN }}" \
+            -H "Content-Type: application/json"
