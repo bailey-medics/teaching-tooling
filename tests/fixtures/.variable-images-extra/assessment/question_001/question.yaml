@@ -1,0 +1,7 @@
+answer: 1
+options:
+  - "Normal"
+  - "Abnormal"
+images:
+  - key: "pa-chest-xray.png"
+    label: "PA chest X-ray"

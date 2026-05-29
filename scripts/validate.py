@@ -216,6 +216,132 @@ def _validate_assessment_dir(
     )
     if not question_dirs:
         result.add_error(rel_base, "no question_NNN directories found")
+        return
+
+    # Validate images in question directories
+    if bank_type == "uniform":
+        _validate_uniform_images(
+            config, question_dirs, rel_base, config_path, result
+        )
+    elif bank_type == "variable":
+        _validate_variable_images(question_dirs, rel_base, result)
+
+
+def _validate_uniform_images(
+    config: dict,
+    question_dirs: list[Path],
+    rel_base: str,
+    config_path: Path,
+    result: ValidationResult,
+) -> None:
+    """Validate image files in uniform assessment question directories.
+
+    Uniform assessments define images at the assessment level. Each
+    question directory must contain files matching the keys.
+    """
+    images = config.get("images")
+    if not images:
+        return
+
+    if not isinstance(images, list):
+        result.add_error(
+            f"{rel_base}/{config_path.name}",
+            "images must be a list of {key, label} objects",
+        )
+        return
+
+    expected_keys: list[str] = []
+    for i, img in enumerate(images):
+        if not isinstance(img, dict) or "key" not in img:
+            result.add_error(
+                f"{rel_base}/{config_path.name}",
+                f"images[{i}] must have a 'key' field",
+            )
+            return
+        expected_keys.append(img["key"])
+
+    expected_set = set(expected_keys)
+
+    for qdir in question_dirs:
+        rel_q = f"{rel_base}/{qdir.name}"
+        existing_files = {f.name for f in qdir.iterdir() if f.is_file()}
+        for key in expected_keys:
+            if key not in existing_files:
+                result.add_error(
+                    rel_q, f"missing image '{key}' (defined in images[])"
+                )
+        # Check for undeclared image files
+        image_files = {
+            f
+            for f in existing_files
+            if Path(f).suffix.lower() in ALLOWED_IMAGE_EXTENSIONS
+        }
+        undeclared = image_files - expected_set
+        for name in sorted(undeclared):
+            result.add_error(
+                rel_q,
+                f"undeclared image '{name}' not in assessment.yaml images[]",
+            )
+
+
+def _validate_variable_images(
+    question_dirs: list[Path],
+    rel_base: str,
+    result: ValidationResult,
+) -> None:
+    """Validate image files in variable assessment question directories.
+
+    Variable assessments define images per question. Each referenced
+    key must exist as a file in the question directory.
+    """
+    for qdir in question_dirs:
+        rel_q = f"{rel_base}/{qdir.name}"
+        question_yaml = qdir / "question.yaml"
+        if not question_yaml.is_file():
+            result.add_error(rel_q, "missing question.yaml")
+            continue
+
+        try:
+            with open(question_yaml) as f:
+                qdata = yaml.safe_load(f)
+        except yaml.YAMLError:
+            continue  # YAML errors caught elsewhere
+
+        if not isinstance(qdata, dict):
+            continue
+
+        images = qdata.get("images")
+        if not images:
+            continue
+
+        existing_files = {f.name for f in qdir.iterdir() if f.is_file()}
+        declared_keys: set[str] = set()
+        for i, img in enumerate(images):
+            if not isinstance(img, dict) or "key" not in img:
+                result.add_error(
+                    rel_q, f"images[{i}] must have a 'key' field"
+                )
+                continue
+            declared_keys.add(img["key"])
+            if img["key"] not in existing_files:
+                result.add_error(
+                    rel_q,
+                    f"missing image '{img['key']}' "
+                    f"(referenced in question.yaml images[{i}])",
+                )
+        # Check for undeclared image files
+        image_files = {
+            f
+            for f in existing_files
+            if Path(f).suffix.lower() in ALLOWED_IMAGE_EXTENSIONS
+        }
+        undeclared = image_files - declared_keys
+        for name in sorted(undeclared):
+            result.add_error(
+                rel_q,
+                f"undeclared image '{name}' not in "
+                f"question.yaml images[]",
+            )
 
 
 def _validate_learning_dir(
