@@ -1,0 +1,9 @@
+version: 1
+title: "Uniform with missing image"
+type: uniform
+images_per_item: 2
+images:
+  - key: "wli.png"
+    label: "White light"
+  - key: "nbi.png"
+    label: "Narrow band imaging"

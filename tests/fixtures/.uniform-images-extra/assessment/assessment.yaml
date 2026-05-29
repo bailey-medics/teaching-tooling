@@ -1,0 +1,7 @@
+version: 1
+title: "Uniform with extra image"
+type: uniform
+images_per_item: 1
+images:
+  - key: "wli.png"
+    label: "White light"

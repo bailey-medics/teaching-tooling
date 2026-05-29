@@ -6,7 +6,12 @@ from pathlib import Path
 # Add scripts/ to path so we can import validate
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
-from validate import ModuleYaml, validate_modules_dir  # noqa: E402
+from validate import (  # noqa: E402
+    ModuleYaml,
+    ValidationResult,
+    _validate_assessment_dir,
+    validate_modules_dir,
+)
 
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -103,3 +108,62 @@ class TestValidateModulesDir:
         module = _validate_module_yaml(invalid_module, result)
         # Should fail — missing moduleId field, invalid status
         assert module is None or not result.is_valid
+
+
+class TestUniformImageValidation:
+    """Test image validation for uniform assessments."""
+
+    def test_valid_uniform_images(self) -> None:
+        """All declared image keys exist in every question dir."""
+        assessment_dir = FIXTURES / ".uniform-images-valid" / "assessment"
+        result = ValidationResult()
+        _validate_assessment_dir(assessment_dir, result)
+        assert result.is_valid, result.summary()
+
+    def test_missing_uniform_image(self) -> None:
+        """Missing image file is reported as an error."""
+        assessment_dir = FIXTURES / ".uniform-images-missing" / "assessment"
+        result = ValidationResult()
+        _validate_assessment_dir(assessment_dir, result)
+        assert not result.is_valid
+        # Should mention the missing file name
+        error_messages = [e.message for e in result.errors]
+        assert any("nbi.png" in m for m in error_messages)
+
+    def test_undeclared_uniform_image(self) -> None:
+        """Image file not declared in assessment.yaml is reported."""
+        assessment_dir = FIXTURES / ".uniform-images-extra" / "assessment"
+        result = ValidationResult()
+        _validate_assessment_dir(assessment_dir, result)
+        assert not result.is_valid
+        error_messages = [e.message for e in result.errors]
+        assert any("old-image.png" in m and "undeclared" in m for m in error_messages)
+
+
+class TestVariableImageValidation:
+    """Test image validation for variable assessments."""
+
+    def test_valid_variable_images(self) -> None:
+        """All per-question image keys exist in the question dir."""
+        assessment_dir = FIXTURES / ".variable-images-valid" / "assessment"
+        result = ValidationResult()
+        _validate_assessment_dir(assessment_dir, result)
+        assert result.is_valid, result.summary()
+
+    def test_missing_variable_image(self) -> None:
+        """Missing image referenced in question.yaml is reported."""
+        assessment_dir = FIXTURES / ".variable-images-missing" / "assessment"
+        result = ValidationResult()
+        _validate_assessment_dir(assessment_dir, result)
+        assert not result.is_valid
+        error_messages = [e.message for e in result.errors]
+        assert any("pa-chest-xray.png" in m for m in error_messages)
+
+    def test_undeclared_variable_image(self) -> None:
+        """Image file not declared in question.yaml is reported."""
+        assessment_dir = FIXTURES / ".variable-images-extra" / "assessment"
+        result = ValidationResult()
+        _validate_assessment_dir(assessment_dir, result)
+        assert not result.is_valid
+        error_messages = [e.message for e in result.errors]
+        assert any("leftover.jpg" in m and "undeclared" in m for m in error_messages)
