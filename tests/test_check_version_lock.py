@@ -84,6 +84,13 @@ class TestRetiredModule:
 
     def test_retired_with_changes_fails(self, tmp_module: Path) -> None:
         """Any diff on a retired module should fail."""
+        # PR branch also has retired status (no regression)
+        (tmp_module / "module.yaml").write_text(
+            yaml.dump(
+                {"moduleId": "test-bank", "status": "retired", "order": 1}
+            )
+        )
+
         result = LockResult()
         with patch(
             "check_version_lock._git_show",
@@ -100,10 +107,17 @@ class TestRetiredModule:
         assert "permanently frozen" in result.violations[0].message
 
     def test_retired_no_changes_still_fails(self, tmp_module: Path) -> None:
-        """Even with no diff, retired modules should still fail.
+        """Even with no diff, retired modules should pass.
 
-        (The script fails on any PR touching a retired module directory.)
+        No file changes means no violation.
         """
+        # PR branch also has retired status (no regression)
+        (tmp_module / "module.yaml").write_text(
+            yaml.dump(
+                {"moduleId": "test-bank", "status": "retired", "order": 1}
+            )
+        )
+
         result = LockResult()
         with patch(
             "check_version_lock._git_show",
@@ -284,3 +298,106 @@ class TestNewModule:
 
         assert result.passed
         assert result.modules_skipped == 1
+
+
+class TestStatusRegression:
+    """Status cannot move backwards (draft → live → retired only)."""
+
+    def test_live_to_draft_fails(self, tmp_module: Path) -> None:
+        """Changing status from live to draft should fail."""
+        # PR has draft
+        (tmp_module / "module.yaml").write_text(
+            yaml.dump({"moduleId": "test-bank", "status": "draft", "order": 1})
+        )
+
+        result = LockResult()
+        with patch(
+            "check_version_lock._git_show",
+            return_value=yaml.dump(
+                {"status": "live", "moduleId": "test-bank"}
+            ),
+        ), patch("check_version_lock._git_diff_names", return_value=[]):
+            check_module(tmp_module, "modules", "origin/main", result)
+
+        assert not result.passed
+        assert "cannot move backwards" in result.violations[0].message
+        assert "live" in result.violations[0].message
+        assert "draft" in result.violations[0].message
+
+    def test_retired_to_live_fails(self, tmp_module: Path) -> None:
+        """Changing status from retired to live should fail."""
+        (tmp_module / "module.yaml").write_text(
+            yaml.dump({"moduleId": "test-bank", "status": "live", "order": 1})
+        )
+
+        result = LockResult()
+        with patch(
+            "check_version_lock._git_show",
+            return_value=yaml.dump(
+                {"status": "retired", "moduleId": "test-bank"}
+            ),
+        ), patch("check_version_lock._git_diff_names", return_value=[]):
+            check_module(tmp_module, "modules", "origin/main", result)
+
+        assert not result.passed
+        assert "cannot move backwards" in result.violations[0].message
+
+    def test_retired_to_draft_fails(self, tmp_module: Path) -> None:
+        """Changing status from retired to draft should fail."""
+        (tmp_module / "module.yaml").write_text(
+            yaml.dump({"moduleId": "test-bank", "status": "draft", "order": 1})
+        )
+
+        result = LockResult()
+        with patch(
+            "check_version_lock._git_show",
+            return_value=yaml.dump(
+                {"status": "retired", "moduleId": "test-bank"}
+            ),
+        ), patch("check_version_lock._git_diff_names", return_value=[]):
+            check_module(tmp_module, "modules", "origin/main", result)
+
+        assert not result.passed
+        assert "cannot move backwards" in result.violations[0].message
+
+    def test_draft_to_live_passes(self, tmp_module: Path) -> None:
+        """Forward transition draft → live should pass."""
+        (tmp_module / "module.yaml").write_text(
+            yaml.dump({"moduleId": "test-bank", "status": "live", "order": 1})
+        )
+
+        # Assessment version stays at 1 (was draft on main)
+        assessment_yaml = tmp_module / "assessment" / "assessment.yaml"
+        assessment_yaml.write_text(
+            yaml.dump({"version": 1, "title": "Test", "type": "uniform"})
+        )
+
+        result = LockResult()
+        with patch(
+            "check_version_lock._git_show",
+            return_value=yaml.dump(
+                {"status": "draft", "moduleId": "test-bank"}
+            ),
+        ), patch("check_version_lock._git_diff_names", return_value=[]):
+            check_module(tmp_module, "modules", "origin/main", result)
+
+        assert result.passed
+
+    def test_live_to_retired_passes(self, tmp_module: Path) -> None:
+        """Forward transition live → retired should pass."""
+        (tmp_module / "module.yaml").write_text(
+            yaml.dump(
+                {"moduleId": "test-bank", "status": "retired", "order": 1}
+            )
+        )
+
+        result = LockResult()
+        with patch(
+            "check_version_lock._git_show",
+            return_value=yaml.dump(
+                {"status": "live", "moduleId": "test-bank"}
+            ),
+        ), patch("check_version_lock._git_diff_names", return_value=[]):
+            check_module(tmp_module, "modules", "origin/main", result)
+
+        assert result.passed
