@@ -318,9 +318,7 @@ def _validate_variable_images(
         declared_keys: set[str] = set()
         for i, img in enumerate(images):
             if not isinstance(img, dict) or "key" not in img:
-                result.add_error(
-                    rel_q, f"images[{i}] must have a 'key' field"
-                )
+                result.add_error(rel_q, f"images[{i}] must have a 'key' field")
                 continue
             declared_keys.add(img["key"])
             if img["key"] not in existing_files:
@@ -339,8 +337,7 @@ def _validate_variable_images(
         for name in sorted(undeclared):
             result.add_error(
                 rel_q,
-                f"undeclared image '{name}' not in "
-                f"question.yaml images[]",
+                f"undeclared image '{name}' not in " f"question.yaml images[]",
             )
 
 

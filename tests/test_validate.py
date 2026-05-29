@@ -13,7 +13,6 @@ from validate import (  # noqa: E402
     validate_modules_dir,
 )
 
-
 FIXTURES = Path(__file__).parent / "fixtures"
 
 
@@ -137,7 +136,9 @@ class TestUniformImageValidation:
         _validate_assessment_dir(assessment_dir, result)
         assert not result.is_valid
         error_messages = [e.message for e in result.errors]
-        assert any("old-image.png" in m and "undeclared" in m for m in error_messages)
+        assert any(
+            "old-image.png" in m and "undeclared" in m for m in error_messages
+        )
 
 
 class TestVariableImageValidation:
@@ -166,4 +167,6 @@ class TestVariableImageValidation:
         _validate_assessment_dir(assessment_dir, result)
         assert not result.is_valid
         error_messages = [e.message for e in result.errors]
-        assert any("leftover.jpg" in m and "undeclared" in m for m in error_messages)
+        assert any(
+            "leftover.jpg" in m and "undeclared" in m for m in error_messages
+        )
