@@ -26,6 +26,9 @@ from typing import Any
 
 import yaml
 
+# Status progression: only forward transitions allowed.
+STATUS_ORDER = {"draft": 0, "live": 1, "retired": 2}
+
 
 @dataclass
 class LockViolation:
@@ -162,6 +165,28 @@ def check_module(
         return
 
     main_status = main_module.get("status")
+
+    # Read PR branch's module.yaml status
+    pr_module_path = module_dir / "module.yaml"
+    pr_status: str | None = None
+    if pr_module_path.is_file():
+        with open(pr_module_path) as f:
+            pr_module = yaml.safe_load(f)
+        if isinstance(pr_module, dict):
+            pr_status = pr_module.get("status")
+
+    # Block backwards status transitions (draft → live → retired only)
+    if (
+        main_status in STATUS_ORDER
+        and pr_status in STATUS_ORDER
+        and STATUS_ORDER[pr_status] < STATUS_ORDER[main_status]
+    ):
+        result.add_violation(
+            module_id,
+            f"status cannot move backwards from '{main_status}' to "
+            f"'{pr_status}' (allowed: draft → live → retired)",
+        )
+        return
 
     if main_status == "draft":
         # Version must remain 1
