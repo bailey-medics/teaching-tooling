@@ -60,7 +60,7 @@ jobs:
   # Validate module metadata and MDX content on pull request
   # -------------------------------------------------------------------
   validate:
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' || (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/feature/'))
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -113,7 +113,7 @@ jobs:
   # Verify branch protection is configured (catches missing Terraform)
   # -------------------------------------------------------------------
   check-protection:
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' || (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/feature/'))
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
