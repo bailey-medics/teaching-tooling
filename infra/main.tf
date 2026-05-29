@@ -74,11 +74,11 @@ resource "github_organization_ruleset" "teaching_protected_branches" {
       strict_required_status_checks_policy = true
 
       required_check {
-        context = "Teaching CI / pipeline / validate"
+        context = "pipeline / validate"
       }
 
       required_check {
-        context = "Teaching CI / pipeline / check-protection"
+        context = "pipeline / check-protection"
       }
     }
 
