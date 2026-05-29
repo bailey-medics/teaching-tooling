@@ -1,8 +1,12 @@
 # main.tf — GitHub branch protection for teaching repositories
 #
-# Uses organisation-level rulesets that auto-apply to any repository
-# matching the "*-teaching" name pattern. No per-repo config needed
-# when onboarding a new content repo — just name it *-teaching.
+# Uses organisation-level rulesets for content repos and repo-level rulesets
+# for teaching-tooling itself.
+#
+# Note: GitHub's fnmatch wildcard patterns (e.g. ~*-teaching) in
+# repository_name conditions don't work reliably with org-level rulesets.
+# We use explicit repo names instead. When onboarding a new content repo,
+# add its name to the teaching_repos local below.
 #
 # Usage:
 #   cd infra/
@@ -25,10 +29,17 @@ provider "github" {
   owner = var.github_owner
 }
 
+locals {
+  teaching_repos = [
+    "eoeeta-teaching",
+    "respiratory-teaching",
+  ]
+}
+
 # ---------------------------------------------------------------------------
 # Org-level Ruleset 1 — Content repos: protected branches
 # ---------------------------------------------------------------------------
-# Targets: all repos matching *-teaching
+# Targets: all repos in teaching_repos list
 #
 # Prevents direct pushes, force pushes, and branch deletion on main.
 # Requires a PR and the Validate CI workflow to pass before merging.
@@ -45,7 +56,7 @@ resource "github_organization_ruleset" "teaching_protected_branches" {
     }
 
     repository_name {
-      include = ["~*-teaching"]
+      include = local.teaching_repos
       exclude = []
     }
   }
@@ -75,7 +86,7 @@ resource "github_organization_ruleset" "teaching_protected_branches" {
 # ---------------------------------------------------------------------------
 # Org-level Ruleset 2 — Content repos: branch naming convention
 # ---------------------------------------------------------------------------
-# Targets: all branches except main in *-teaching repos
+# Targets: all branches except main in content repos
 
 resource "github_organization_ruleset" "teaching_branch_naming" {
   name        = "teaching-content-branch-naming"
@@ -89,7 +100,7 @@ resource "github_organization_ruleset" "teaching_branch_naming" {
     }
 
     repository_name {
-      include = ["~*-teaching"]
+      include = local.teaching_repos
       exclude = []
     }
   }
